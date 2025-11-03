@@ -1,0 +1,47 @@
+name: Deploy Gallery
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install gallery toolchain
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Build gallery site
+        # Adjust --slug or add a matrix if you publish multiple regions.
+        run: |
+          wplace-gallery build \\
+            --slug nemo \\
+            --config config.json \\
+            --asset-base-url "${{ secrets.GALLERY_ASSET_BASE_URL }}" \\
+            --output dist/index.html
+
+      - name: Publish to gallery-site branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: dist
+          publish_branch: gallery-site
+          force_orphan: true

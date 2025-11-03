@@ -5,6 +5,9 @@ This repository provides the Python runtime, capture worker, and storage abstrac
 ## Project layout
 
 - `src/wplace_timelapse_serverless/` – core package containing configuration models, manifest types, storage adapters, and the capture runner.
+- `src/wplace_timelapse_serverless/web_gallery/` – static gallery generator for browsing stored tiles.
+- `src/wplace_timelapse_serverless/video/` – timelapse video renderer that converts manifest history into frames and mp4 output.
+- `src/wplace_timelapse_serverless/cloudflare_worker/` – Cloudflare Worker entrypoint that signs and proxies S3/R2 requests.
 - `tests/` – unit and smoke tests (placeholders today).
 - `pyproject.toml` – project metadata and dependency list.
 
@@ -25,6 +28,50 @@ wplace-capture --slug example_region
 ```
 
 The CLI uses environment variables and command-line overrides for credentials and bucket naming. See `wplace_timelapse_serverless/cli.py` for the full list of options.
+
+### Build the live gallery shell
+
+Generate the HTML scaffold that streams manifests and tiles via your Cloudflare Worker (or any SigV4 proxy):
+
+```bash
+wplace-gallery build --slug example_region --asset-base-url https://worker.example.com --output ./site/index.html
+# tweak --max-captures for longer timelines (default: 50)
+```
+
+No secrets are embedded in the output. At runtime, the page fetches `latest.json`, delta manifests, and tile PNGs through the worker, so new captures appear without rebuilding.
+
+### Render a timelapse video
+
+Compose frames from manifests and encode a video (requires `ffmpeg` in PATH):
+
+```bash
+wplace-video render --slug example_region --bucket your-bucket --output-dir ./renders
+# set --frames-only to skip ffmpeg or --discard-frames to clean up PNGs afterwards
+```
+
+Frames and a `frames.json` manifest are written to `./renders/frames/` before encoding an H.264 mp4.
+
+### Deploy the Cloudflare S3 proxy worker
+
+The worker signs requests with AWS SigV4 so browsers (and the gallery) can fetch manifests/tiles without exposing credentials:
+
+```bash
+# wrangler.toml snippet
+[vars]
+S3_ENDPOINT = "https://s3.amazonaws.com"
+S3_BUCKET = "your-bucket"
+AWS_REGION = "us-east-1"
+AWS_ACCESS_KEY_ID = "..."
+AWS_SECRET_ACCESS_KEY = "..."
+ALLOWED_ORIGINS = "https://example.com"
+CACHE_TTL = "300"
+STRIP_PREFIX = "static" # optional
+VIRTUAL_HOSTED_STYLE = "1" # optional; set for AWS-hosted buckets
+```
+
+Expose the worker at a public hostname (e.g. `https://worker.example.com`) and use that URL as the `--asset-base-url` when building the gallery. The HTML shell then calls the worker for `manifests/<slug>/latest.json` and tile PNGs on demand. The route `/static/...` would be rewritten to the bucket object key after removing the prefix. Responses automatically add permissive CORS headers when `ALLOWED_ORIGINS` matches the request origin.
+
+If you reuse the provided `gallery-deploy` workflow, store this worker URL in the `GALLERY_ASSET_BASE_URL` repository secret so the build step can inject it during publishing.
 
 ## Design highlights
 
