@@ -1,0 +1,4 @@
+# Copy this file to .dev.vars and fill in your secrets for local dev.
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_SESSION_TOKEN=

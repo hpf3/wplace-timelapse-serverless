@@ -1,0 +1,14 @@
+name = "wplace-timelapse-worker"
+main = "src/wplace_timelapse_serverless/cloudflare_worker/worker.py"
+compatibility_date = "2024-10-01"
+compatibility_flags = ["python_workers"]
+
+[vars]
+S3_ENDPOINT = "https://s3.riftwalkerdev.com"
+S3_BUCKET = "timelapse"
+AWS_REGION = "us-east-1"
+ALLOWED_ORIGINS = "https://example.com"
+CACHE_TTL = "300"
+STRIP_PREFIX = ""
+VIRTUAL_HOSTED_STYLE = "0"
+UPSTREAM_USER_AGENT = "wplace-worker/1.0"
