@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -73,6 +74,9 @@ def build(
 
 
 def main() -> None:  # pragma: no cover - console entrypoint
+    # Support historic `wplace-gallery build ...` invocations used by workflows.
+    if len(sys.argv) > 1 and sys.argv[1] == "build":
+        sys.argv.pop(1)
     app()
 
 
