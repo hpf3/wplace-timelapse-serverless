@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wplace-cloudflare-worker"
+version = "0.1.0"
+description = "Cloudflare Worker that proxies S3-compatible storage for the WPlace timelapse system."
+authors = [
+  { name = "WPlace Timelapse Contributors" }
+]
+requires-python = ">=3.11"
+dependencies = [
+  "workers-py"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["wplace_cloudflare_worker"]
+

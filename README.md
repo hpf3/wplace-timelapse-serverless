@@ -7,7 +7,7 @@ This repository provides the Python runtime, capture worker, and storage abstrac
 - `src/wplace_timelapse_serverless/` – core package containing configuration models, manifest types, storage adapters, and the capture runner.
 - `src/wplace_timelapse_serverless/web_gallery/` – static gallery generator for browsing stored tiles.
 - `src/wplace_timelapse_serverless/video/` – timelapse video renderer that converts manifest history into frames and mp4 output.
-- `src/wplace_timelapse_serverless/cloudflare_worker/` – Cloudflare Worker entrypoint that signs and proxies S3/R2 requests.
+- `cloudflare_worker/src/wplace_cloudflare_worker/` – Cloudflare Worker entrypoint that signs and proxies S3/R2 requests.
 - `tests/` – unit and smoke tests (placeholders today).
 - `pyproject.toml` – project metadata and dependency list.
 
