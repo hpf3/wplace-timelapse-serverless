@@ -11,6 +11,7 @@ from urllib.parse import parse_qsl, quote, urlparse
 
 import js
 from pyodide.ffi import to_js
+from workers import WorkerEntrypoint
 
 SERVICE_NAME = "s3"
 FORWARDED_HEADERS = (
@@ -86,7 +87,7 @@ class WorkerConfig:
 _CONFIG: Optional[WorkerConfig] = None
 
 
-async def main(request, env, ctx):  # type: ignore[invalid-annotation]
+async def main(request, env, ctx=None):  # type: ignore[invalid-annotation]
     """Cloudflare Worker entrypoint compatible with the Python runtime."""
     del ctx  # Unused but part of the signature.
 
@@ -337,4 +338,9 @@ def _env_get(env: object, key: str, default: Optional[str] = None) -> Optional[s
     return default
 
 
-__all__ = ["main"]
+class Default(WorkerEntrypoint):
+    async def fetch(self, request):
+        return await main(request, self.env)
+
+
+__all__ = ["Default", "main"]
