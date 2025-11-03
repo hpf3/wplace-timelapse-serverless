@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
 from time import perf_counter
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from wplace_timelapse_serverless.config import TimelapseConfig
 from wplace_timelapse_serverless.manifest import DeltaManifest, ManifestFailure, ManifestPointer, ManifestTile
@@ -29,6 +29,38 @@ class CaptureOutcome:
     duration_seconds: float
 
 
+def _build_previous_tile_map(
+    storage: StorageBackend,
+    pointer: ManifestPointer,
+    expected_coordinates: Iterable[Tuple[int, int]],
+) -> Dict[Tuple[int, int], ManifestTile]:
+    """Walk manifest history to recover the latest tile metadata for each coordinate."""
+    tile_state: Dict[Tuple[int, int], ManifestTile] = {}
+    remaining: Set[Tuple[int, int]] = set(expected_coordinates)
+    visited_keys: Set[str] = set()
+
+    current: Optional[ManifestPointer] = pointer
+    while current and current.object_key not in visited_keys:
+        manifest = storage.load_manifest(current)
+        visited_keys.add(current.object_key)
+
+        for tile in manifest.tiles:
+            if tile.coordinate not in tile_state:
+                tile_state[tile.coordinate] = tile
+                remaining.discard(tile.coordinate)
+
+        if not remaining:
+            break
+
+        previous_key = manifest.previous_manifest
+        if not previous_key:
+            break
+
+        current = ManifestPointer(object_key=previous_key, capture_time=manifest.capture_time)
+
+    return tile_state
+
+
 def run_capture(
     *,
     slug: str,
@@ -43,9 +75,13 @@ def run_capture(
     start = perf_counter()
 
     pointer = storage.get_latest_manifest(slug)
-    previous_manifest = storage.load_manifest(pointer) if pointer else None
+
+    coordinates = list(config.coordinates.iter_tiles())
+    total_tiles = len(coordinates)
+    LOGGER.info("Starting capture for %s (%d tiles)", slug, total_tiles)
+
     previous_tiles: Dict[Tuple[int, int], ManifestTile] = (
-        previous_manifest.tile_map() if previous_manifest else {}
+        _build_previous_tile_map(storage, pointer, coordinates) if pointer else {}
     )
 
     changed_tiles: List[ManifestTile] = []
@@ -53,10 +89,6 @@ def run_capture(
     failures: List[ManifestFailure] = []
 
     seen_checksums: Dict[str, ManifestTile] = {}
-
-    coordinates = list(config.coordinates.iter_tiles())
-    total_tiles = len(coordinates)
-    LOGGER.info("Starting capture for %s (%d tiles)", slug, total_tiles)
 
     for index, (x, y) in enumerate(coordinates):
         try:
