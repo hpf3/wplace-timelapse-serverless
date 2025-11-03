@@ -8,7 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Iterable, Iterator, Optional, Sequence, Tuple
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 
 class Coordinates(BaseModel):
@@ -73,6 +73,14 @@ class TimelapseConfig(BaseModel):
 
     def enabled_modes(self) -> Iterable[Tuple[str, TimelapseMode]]:
         return ((name, mode) for name, mode in self.timelapse_modes.items() if mode.enabled)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _default_name(cls, data: object) -> object:
+        """Populate name from slug when omitted in legacy configs."""
+        if isinstance(data, dict) and "name" not in data and "slug" in data:
+            data = {**data, "name": data["slug"]}
+        return data
 
 
 class DiffSettings(BaseModel):
