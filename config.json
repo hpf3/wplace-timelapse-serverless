@@ -1,0 +1,23 @@
+{
+  "timelapses": [
+    {
+      "slug": "nemo",
+      "coordinates": {
+        "xmin": 292,
+        "xmax": 296,
+        "ymin": 1250,
+        "ymax": 1256
+      },
+      "enabled": true
+    }
+  ],
+  "global_settings": {
+    "base_url": "https://backend.wplace.live/files/s0/tiles",
+    "request_delay": 0.5,
+    "background_color": [
+      37,
+      150,
+      190
+    ]
+  }
+}

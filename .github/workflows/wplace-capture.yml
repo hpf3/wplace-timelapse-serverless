@@ -1,0 +1,48 @@
+name: WPlace Capture
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wplace-capture
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: prod
+
+    steps:
+      - name: Checkout repository at main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install capture tool
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run capture
+        env:
+          WPLACE_CONFIG_PATH: ./config.json
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          WPLACE_BUCKET_NAME: ${{ secrets.WPLACE_BUCKET_NAME }}
+          WPLACE_REGION: ${{ secrets.WPLACE_REGION }}
+          WPLACE_ENDPOINT_URL: ${{ secrets.WPLACE_ENDPOINT_URL }}
+        run: |
+          wplace-capture --slug nemo

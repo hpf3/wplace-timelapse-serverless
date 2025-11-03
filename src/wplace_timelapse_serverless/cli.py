@@ -126,3 +126,7 @@ def capture(
 
 if __name__ == "__main__":  # pragma: no cover
     app()
+
+
+def main() -> None:  # pragma: no cover - thin wrapper for console script
+    app()

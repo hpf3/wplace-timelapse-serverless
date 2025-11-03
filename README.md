@@ -42,3 +42,10 @@ The CLI uses environment variables and command-line overrides for credentials an
 ## Test secrets
 
 If you run integration tests against a self-hosted S3-compatible server, copy `tests/.env.secrets.example` to `tests/.env.secrets` and fill in your endpoint, bucket, and credentials. The upcoming test suite will read those values to authenticate.
+
+Run the capture integration test (optional, requires network access and a live tile source):
+
+```bash
+export RUN_CAPTURE_TEST=1
+pytest tests/test_capture_integration.py
+```

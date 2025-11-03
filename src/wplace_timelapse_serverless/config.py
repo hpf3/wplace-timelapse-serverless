@@ -8,7 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Iterable, Iterator, Optional, Sequence, Tuple
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 class Coordinates(BaseModel):
@@ -21,16 +21,16 @@ class Coordinates(BaseModel):
 
     @field_validator("xmax")
     @classmethod
-    def _validate_xmax(cls, value: int, values: Sequence[Tuple[str, int]] | None) -> int:
-        xmin = dict(values or ()).get("xmin", value)
+    def _validate_xmax(cls, value: int, info: ValidationInfo) -> int:
+        xmin = info.data.get("xmin", value) if info.data else value
         if value < xmin:
             raise ValueError("xmax must be greater than or equal to xmin")
         return value
 
     @field_validator("ymax")
     @classmethod
-    def _validate_ymax(cls, value: int, values: Sequence[Tuple[str, int]] | None) -> int:
-        ymin = dict(values or ()).get("ymin", value)
+    def _validate_ymax(cls, value: int, info: ValidationInfo) -> int:
+        ymin = info.data.get("ymin", value) if info.data else value
         if value < ymin:
             raise ValueError("ymax must be greater than or equal to ymin")
         return value

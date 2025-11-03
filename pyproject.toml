@@ -23,11 +23,12 @@ dependencies = [
 dev = [
   "pytest>=8.3,<9.0",
   "ruff>=0.5.0,<0.6.0",
-  "mypy>=1.10,<1.11"
+  "mypy>=1.10,<1.11",
+  "python-dotenv>=1.0,<2.0"
 ]
 
 [project.scripts]
-wplace-capture = "wplace_timelapse_serverless.cli:capture"
+wplace-capture = "wplace_timelapse_serverless.cli:main"
 
 [tool.ruff]
 line-length = 100
