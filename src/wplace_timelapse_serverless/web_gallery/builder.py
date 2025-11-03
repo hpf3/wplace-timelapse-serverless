@@ -442,7 +442,7 @@ def _render_shell(payload: RuntimePayload) -> str:
       const board = new Map();
       const snapshots = [];
 
-      records.forEach(({ key, manifest }, index) => {{
+      records.forEach(({{ key, manifest }}, index) => {{
         const changedTiles = [];
         (manifest.tiles || []).forEach((tile) => {{
           const coordKey = tile.coordinate.join(',');
