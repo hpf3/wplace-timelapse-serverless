@@ -17,7 +17,7 @@ dependencies = [
   "requests>=2.31,<3.0",
   "typer>=0.12,<1.0",
   "python-dateutil>=2.9,<3.0",
-  "Pillow>=10.0,<10.3",
+  "Pillow",
   "workers-py",
   "fastapi"
 ]
