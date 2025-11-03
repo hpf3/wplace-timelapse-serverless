@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 
 from wplace_timelapse_serverless.config import GlobalSettings, TimelapseConfig
 
@@ -20,6 +20,27 @@ class GalleryBuildOptions:
     manifest_prefix: str
     latest_suffix: str = "latest.json"
     max_manifests: Optional[int] = None
+
+
+class RuntimeCoordinates(TypedDict):
+    xmin: int
+    xmax: int
+    ymin: int
+    ymax: int
+    width: int
+    height: int
+
+
+class RuntimePayload(TypedDict):
+    slug: str
+    name: str
+    description: str
+    assetBaseUrl: str
+    manifestPrefix: str
+    latestKey: str
+    maxManifests: int | None
+    coordinates: RuntimeCoordinates
+    backgroundColor: list[int]
 
 
 def build_gallery(
@@ -41,7 +62,7 @@ def _build_runtime_payload(
     timelapse: TimelapseConfig,
     global_settings: GlobalSettings,
     options: GalleryBuildOptions,
-) -> dict[str, object]:
+) -> RuntimePayload:
     coordinates = timelapse.coordinates
     width = coordinates.width
     height = coordinates.height
@@ -68,7 +89,7 @@ def _build_runtime_payload(
     }
 
 
-def _render_shell(payload: dict[str, object]) -> str:
+def _render_shell(payload: RuntimePayload) -> str:
     config_json = json.dumps(payload, separators=(",", ":"))
     title = f"{payload['name']} – Live Tile Gallery"
 
