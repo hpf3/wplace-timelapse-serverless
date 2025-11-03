@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from hashlib import sha256
 from time import perf_counter
 from typing import Dict, Iterable, List, Optional, Set, Tuple
@@ -61,6 +61,12 @@ def _build_previous_tile_map(
     return tile_state
 
 
+def _as_utc_date(value: datetime) -> date:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).date()
+
+
 def run_capture(
     *,
     slug: str,
@@ -75,13 +81,16 @@ def run_capture(
     start = perf_counter()
 
     pointer = storage.get_latest_manifest(slug)
+    capture_date = _as_utc_date(capture_at)
+
+    force_full_snapshot = pointer is None or _as_utc_date(pointer.capture_time) != capture_date
 
     coordinates = list(config.coordinates.iter_tiles())
     total_tiles = len(coordinates)
     LOGGER.info("Starting capture for %s (%d tiles)", slug, total_tiles)
 
     previous_tiles: Dict[Tuple[int, int], ManifestTile] = (
-        _build_previous_tile_map(storage, pointer, coordinates) if pointer else {}
+        _build_previous_tile_map(storage, pointer, coordinates) if pointer and not force_full_snapshot else {}
     )
 
     changed_tiles: List[ManifestTile] = []
@@ -100,7 +109,7 @@ def run_capture(
 
         checksum = sha256(payload).hexdigest()
         previous_tile = previous_tiles.get((x, y))
-        if previous_tile and previous_tile.checksum == checksum:
+        if not force_full_snapshot and previous_tile and previous_tile.checksum == checksum:
             deduplicated_tiles.append(previous_tile)
             fetcher.sleep_between_requests(total_tiles - index - 1)
             continue

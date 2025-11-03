@@ -132,3 +132,42 @@ def test_capture_uses_manifest_history_for_unchanged_tiles() -> None:
     )
     assert not run3.changed_tiles
     assert {tile.coordinate for tile in run3.deduplicated_tiles} == {(0, 0), (0, 1)}
+
+
+def test_capture_records_full_snapshot_on_new_day() -> None:
+    storage = InMemoryStorage()
+    fetcher = DummyFetcher()
+    config = _make_config()
+
+    base_time = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+    fetcher.payloads = {(0, 0): b"A", (0, 1): b"B"}
+    first = run_capture(
+        slug=config.slug,
+        config=config,
+        storage=storage,
+        fetcher=fetcher,
+        capture_time=base_time,
+    )
+    assert {tile.coordinate for tile in first.changed_tiles} == {(0, 0), (0, 1)}
+    assert not first.deduplicated_tiles
+
+    second = run_capture(
+        slug=config.slug,
+        config=config,
+        storage=storage,
+        fetcher=fetcher,
+        capture_time=base_time + timedelta(minutes=6),
+    )
+    assert not second.changed_tiles
+    assert {tile.coordinate for tile in second.deduplicated_tiles} == {(0, 0), (0, 1)}
+
+    third = run_capture(
+        slug=config.slug,
+        config=config,
+        storage=storage,
+        fetcher=fetcher,
+        capture_time=base_time + timedelta(days=1),
+    )
+    assert {tile.coordinate for tile in third.changed_tiles} == {(0, 0), (0, 1)}
+    assert not third.deduplicated_tiles
