@@ -415,7 +415,7 @@ def _render_shell(payload: RuntimePayload) -> str:
       if (snapshot.failed && snapshot.failed > 0) {{
         selectors.failures.classList.remove('hidden');
         selectors.failuresList.innerHTML = snapshot.failedTiles
-          .map((coord) => `<li>(${coord[0]}, ${coord[1]}) — ${escapeHtml(coord[2] || 'failed')}</li>`)
+          .map((coord) => `<li>(${{coord[0]}}, ${{coord[1]}}) — ${{escapeHtml(coord[2] || 'failed')}}</li>`)
           .join('');
       }} else {{
         selectors.failures.classList.add('hidden');

@@ -1,4 +1,4 @@
-name = "wplace-timelapse-worker"
+name = "s3relay"
 main = "src/wplace_timelapse_serverless/cloudflare_worker/worker.py"
 compatibility_date = "2024-10-01"
 compatibility_flags = ["python_workers"]
