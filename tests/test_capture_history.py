@@ -7,8 +7,8 @@ from typing import Dict, Optional, Set, Tuple
 
 from wplace_timelapse_serverless.capture import run_capture
 from wplace_timelapse_serverless.config import Coordinates, TimelapseConfig
-from wplace_timelapse_serverless.manifest import DeltaManifest, ManifestPointer, ManifestTile
-from wplace_timelapse_serverless.storage.base import StorageBackend, StoredTile
+from wplace_timelapse_serverless.manifest import DeltaManifest, ManifestFailure, ManifestPointer, ManifestTile
+from wplace_timelapse_serverless.storage.base import StorageBackend, StoredTile, TileCacheSnapshot
 
 
 Coordinate = Tuple[int, int]
@@ -230,8 +230,8 @@ def test_capture_prefers_cached_tile_state_over_history() -> None:
         def update_latest_manifest(self, slug: str, pointer: ManifestPointer) -> None:
             return None
 
-        def load_tile_cache(self, slug: str) -> Dict[Coordinate, ManifestTile]:
-            return cached_tiles
+        def load_tile_cache(self, slug: str) -> TileCacheSnapshot:
+            return TileCacheSnapshot(tiles=cached_tiles, missing=set())
 
         def write_tile_cache(
             self,
@@ -261,3 +261,68 @@ def test_capture_prefers_cached_tile_state_over_history() -> None:
     assert storage.last_cache_tiles == cached_tiles
     assert storage.last_cache_expected == set(config.coordinates.iter_tiles())
     assert storage.last_cache_time == capture_time
+
+
+def test_capture_stops_history_scan_after_failure_entry() -> None:
+    base_time = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    capture_time = base_time + timedelta(minutes=10)
+
+    config = _make_config()
+    fetcher = DummyFetcher()
+    fetcher.payloads = {(0, 0): b"X", (0, 1): b"Y"}
+
+    latest_key = "manifests/test/latest.json"
+    previous_key = "manifests/test/older.json"
+
+    failure_manifest = DeltaManifest(
+        slug=config.slug,
+        capture_time=base_time,
+        previous_manifest=previous_key,
+        tiles=[],
+        failed_tiles=[
+            ManifestFailure(coordinate=(0, 0), reason="404"),
+            ManifestFailure(coordinate=(0, 1), reason="404"),
+        ],
+        metadata={},
+    )
+
+    previous_manifest = DeltaManifest(
+        slug=config.slug,
+        capture_time=base_time - timedelta(minutes=5),
+        previous_manifest=None,
+        tiles=[
+            ManifestTile(
+                coordinate=(0, 0),
+                object_key="tiles/test/older-0,0.png",
+                checksum="abc",
+                size=1,
+            )
+        ],
+        failed_tiles=[],
+        metadata={},
+    )
+
+    class HistoryStorage(InMemoryStorage):
+        def __init__(self) -> None:
+            super().__init__()
+            self.load_keys: list[str] = []
+
+        def load_manifest(self, pointer: ManifestPointer) -> DeltaManifest:
+            self.load_keys.append(pointer.object_key)
+            return super().load_manifest(pointer)
+
+    storage = HistoryStorage()
+    storage.manifests[latest_key] = failure_manifest
+    storage.manifests[previous_key] = previous_manifest
+    storage.latest[config.slug] = ManifestPointer(object_key=latest_key, capture_time=base_time)
+
+    outcome = run_capture(
+        slug=config.slug,
+        config=config,
+        storage=storage,
+        fetcher=fetcher,
+        capture_time=capture_time,
+    )
+
+    assert storage.load_keys == [latest_key]
+    assert {tile.coordinate for tile in outcome.changed_tiles} == {(0, 0), (0, 1)}

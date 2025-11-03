@@ -19,7 +19,7 @@ from wplace_timelapse_serverless.manifest import (
     format_timestamp,
     parse_timestamp,
 )
-from wplace_timelapse_serverless.storage.base import AbstractStorageBackend, Coordinate, StoredTile
+from wplace_timelapse_serverless.storage.base import AbstractStorageBackend, Coordinate, StoredTile, TileCacheSnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,14 +152,14 @@ class S3StorageBackend(AbstractStorageBackend):
             ContentType="application/json",
         )
 
-    def load_tile_cache(self, slug: str) -> Dict[Coordinate, ManifestTile]:
-        """Load cached tile metadata for a slug, returning an empty map when absent."""
+    def load_tile_cache(self, slug: str) -> TileCacheSnapshot:
+        """Load cached tile metadata for a slug, returning an empty snapshot when absent."""
         key = self.paths.tile_state_key(slug)
         try:
             response = self.client.get_object(Bucket=self.paths.bucket, Key=key)
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404"}:
-                return {}
+                return TileCacheSnapshot()
             raise
 
         payload = response["Body"].read().decode("utf-8")
@@ -179,7 +179,14 @@ class S3StorageBackend(AbstractStorageBackend):
                 size=int(entry["size"]),
             )
 
-        return tiles
+        missing: Set[Coordinate] = set()
+        for entry in data.get("missing_coordinates", []):
+            if isinstance(entry, (list, tuple)) and len(entry) == 2:
+                missing.add((int(entry[0]), int(entry[1])))
+            else:  # pragma: no cover - guard for unexpected legacy formats
+                raise ValueError(f"Invalid missing coordinate entry in cached tile state: {entry!r}")
+
+        return TileCacheSnapshot(tiles=tiles, missing=missing)
 
     def write_tile_cache(
         self,

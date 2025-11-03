@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Protocol
+from typing import Dict, Optional, Protocol, Set
 
 from wplace_timelapse_serverless.manifest import Coordinate, DeltaManifest, ManifestPointer, ManifestTile
 
@@ -16,6 +16,14 @@ class StoredTile:
 
     tile: ManifestTile
     existed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TileCacheSnapshot:
+    """Cached tile metadata for a slug."""
+
+    tiles: Dict[Coordinate, ManifestTile] = field(default_factory=dict)
+    missing: Set[Coordinate] = field(default_factory=set)
 
 
 class StorageBackend(Protocol):
@@ -75,4 +83,4 @@ class AbstractStorageBackend(StorageBackend, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
 
-__all__ = ["AbstractStorageBackend", "StorageBackend", "StoredTile"]
+__all__ = ["AbstractStorageBackend", "StorageBackend", "StoredTile", "TileCacheSnapshot"]

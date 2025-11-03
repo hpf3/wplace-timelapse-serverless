@@ -11,7 +11,7 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from wplace_timelapse_serverless.config import TimelapseConfig
 from wplace_timelapse_serverless.manifest import DeltaManifest, ManifestFailure, ManifestPointer, ManifestTile
-from wplace_timelapse_serverless.storage.base import StorageBackend
+from wplace_timelapse_serverless.storage.base import StorageBackend, TileCacheSnapshot
 from wplace_timelapse_serverless.tile_fetcher import TileFetchError, TileFetcher
 
 
@@ -55,9 +55,23 @@ def _build_previous_tile_map(
             if LOGGER.isEnabledFor(logging.DEBUG):
                 LOGGER.debug("Tile cache load error for %s", slug, exc_info=True)
         else:
-            for coord, tile in cached_tiles.items():
+            cache_missing: Set[Tuple[int, int]] = set()
+            cache_map: Dict[Tuple[int, int], ManifestTile]
+            if isinstance(cached_tiles, TileCacheSnapshot):
+                cache_map = cached_tiles.tiles
+                cache_missing = set(cached_tiles.missing)
+            elif isinstance(cached_tiles, tuple) and len(cached_tiles) == 2:
+                cache_map = dict(cached_tiles[0])
+                cache_missing = set(cached_tiles[1])
+            else:
+                cache_map = dict(cached_tiles)
+
+            for coord, tile in cache_map.items():
                 if coord in remaining:
                     tile_state[coord] = tile
+                    remaining.discard(coord)
+            for coord in cache_missing:
+                if coord in remaining:
                     remaining.discard(coord)
             if not remaining:
                 return tile_state
@@ -78,6 +92,11 @@ def _build_previous_tile_map(
             if tile.coordinate in remaining:
                 tile_state[tile.coordinate] = tile
                 remaining.discard(tile.coordinate)
+
+        for failure in manifest.failed_tiles:
+            coord = failure.coordinate
+            if coord in remaining:
+                remaining.discard(coord)
 
         previous_key = manifest.previous_manifest
         if not previous_key:
@@ -206,22 +225,21 @@ def run_capture(
             tile_state[tile.coordinate] = tile
         for tile in changed_tiles:
             tile_state[tile.coordinate] = tile
-        if tile_state:
-            try:
-                cache_writer(
-                    slug=slug,
-                    capture_time=capture_at,
-                    tiles=tile_state,
-                    expected_coordinates=coordinate_set,
-                )
-            except Exception as exc:  # pragma: no cover - defensive guard around optional backend feature
-                LOGGER.warning(
-                    "Failed to update cached tile state for %s: %s",
-                    slug,
-                    exc,
-                )
-                if LOGGER.isEnabledFor(logging.DEBUG):
-                    LOGGER.debug("Tile cache write error for %s", slug, exc_info=True)
+        try:
+            cache_writer(
+                slug=slug,
+                capture_time=capture_at,
+                tiles=tile_state,
+                expected_coordinates=coordinate_set,
+            )
+        except Exception as exc:  # pragma: no cover - defensive guard around optional backend feature
+            LOGGER.warning(
+                "Failed to update cached tile state for %s: %s",
+                slug,
+                exc,
+            )
+            if LOGGER.isEnabledFor(logging.DEBUG):
+                LOGGER.debug("Tile cache write error for %s", slug, exc_info=True)
 
     LOGGER.info(
         "Capture for %s finished in %.2fs (%d changed, %d deduplicated, %d failed)",
