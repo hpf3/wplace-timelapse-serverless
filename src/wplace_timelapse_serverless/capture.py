@@ -16,6 +16,7 @@ from wplace_timelapse_serverless.tile_fetcher import TileFetchError, TileFetcher
 
 
 LOGGER = logging.getLogger("wplace.capture")
+_MANIFEST_HISTORY_LOOKUPS_LIMIT = 512
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,32 +32,66 @@ class CaptureOutcome:
 
 def _build_previous_tile_map(
     storage: StorageBackend,
-    pointer: ManifestPointer,
+    slug: str,
+    pointer: Optional[ManifestPointer],
     expected_coordinates: Iterable[Tuple[int, int]],
+    *,
+    max_history_lookups: int = _MANIFEST_HISTORY_LOOKUPS_LIMIT,
 ) -> Dict[Tuple[int, int], ManifestTile]:
-    """Walk manifest history to recover the latest tile metadata for each coordinate."""
+    """Recover the latest metadata for each coordinate without re-fetching tile bytes."""
     tile_state: Dict[Tuple[int, int], ManifestTile] = {}
     remaining: Set[Tuple[int, int]] = set(expected_coordinates)
-    visited_keys: Set[str] = set()
 
+    cache_loader = getattr(storage, "load_tile_cache", None)
+    if cache_loader:
+        try:
+            cached_tiles = cache_loader(slug)
+        except Exception as exc:  # pragma: no cover - defensive guard around optional backend feature
+            LOGGER.warning(
+                "Failed to load cached tile state for %s; falling back to manifest history: %s",
+                slug,
+                exc,
+            )
+            if LOGGER.isEnabledFor(logging.DEBUG):
+                LOGGER.debug("Tile cache load error for %s", slug, exc_info=True)
+        else:
+            for coord, tile in cached_tiles.items():
+                if coord in remaining:
+                    tile_state[coord] = tile
+                    remaining.discard(coord)
+            if not remaining:
+                return tile_state
+
+    if pointer is None:
+        return tile_state
+
+    visited_keys: Set[str] = set()
     current: Optional[ManifestPointer] = pointer
-    while current and current.object_key not in visited_keys:
+    lookups = 0
+
+    while current and current.object_key not in visited_keys and remaining and lookups < max_history_lookups:
         manifest = storage.load_manifest(current)
         visited_keys.add(current.object_key)
+        lookups += 1
 
         for tile in manifest.tiles:
-            if tile.coordinate not in tile_state:
+            if tile.coordinate in remaining:
                 tile_state[tile.coordinate] = tile
                 remaining.discard(tile.coordinate)
-
-        if not remaining:
-            break
 
         previous_key = manifest.previous_manifest
         if not previous_key:
             break
 
         current = ManifestPointer(object_key=previous_key, capture_time=manifest.capture_time)
+
+    if remaining:
+        LOGGER.warning(
+            "Tile history incomplete for %s: %d coordinates unresolved after %d manifest lookups.",
+            slug,
+            len(remaining),
+            lookups,
+        )
 
     return tile_state
 
@@ -86,11 +121,12 @@ def run_capture(
     force_full_snapshot = pointer is None or _as_utc_date(pointer.capture_time) != capture_date
 
     coordinates = list(config.coordinates.iter_tiles())
+    coordinate_set: Set[Tuple[int, int]] = set(coordinates)
     total_tiles = len(coordinates)
     LOGGER.info("Starting capture for %s (%d tiles)", slug, total_tiles)
 
     previous_tiles: Dict[Tuple[int, int], ManifestTile] = (
-        _build_previous_tile_map(storage, pointer, coordinates) if pointer and not force_full_snapshot else {}
+        _build_previous_tile_map(storage, slug, pointer, coordinates) if pointer and not force_full_snapshot else {}
     )
 
     changed_tiles: List[ManifestTile] = []
@@ -160,6 +196,32 @@ def run_capture(
 
     manifest_pointer = storage.write_manifest(manifest)
     storage.update_latest_manifest(slug, manifest_pointer)
+
+    cache_writer = getattr(storage, "write_tile_cache", None)
+    if cache_writer:
+        tile_state: Dict[Tuple[int, int], ManifestTile] = {
+            coord: tile for coord, tile in previous_tiles.items() if coord in coordinate_set
+        }
+        for tile in deduplicated_tiles:
+            tile_state[tile.coordinate] = tile
+        for tile in changed_tiles:
+            tile_state[tile.coordinate] = tile
+        if tile_state:
+            try:
+                cache_writer(
+                    slug=slug,
+                    capture_time=capture_at,
+                    tiles=tile_state,
+                    expected_coordinates=coordinate_set,
+                )
+            except Exception as exc:  # pragma: no cover - defensive guard around optional backend feature
+                LOGGER.warning(
+                    "Failed to update cached tile state for %s: %s",
+                    slug,
+                    exc,
+                )
+                if LOGGER.isEnabledFor(logging.DEBUG):
+                    LOGGER.debug("Tile cache write error for %s", slug, exc_info=True)
 
     LOGGER.info(
         "Capture for %s finished in %.2fs (%d changed, %d deduplicated, %d failed)",

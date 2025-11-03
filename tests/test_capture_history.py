@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Tuple
+from hashlib import sha256
+from typing import Dict, Optional, Set, Tuple
 
 from wplace_timelapse_serverless.capture import run_capture
 from wplace_timelapse_serverless.config import Coordinates, TimelapseConfig
@@ -171,3 +172,92 @@ def test_capture_records_full_snapshot_on_new_day() -> None:
     )
     assert {tile.coordinate for tile in third.changed_tiles} == {(0, 0), (0, 1)}
     assert not third.deduplicated_tiles
+
+
+def test_capture_prefers_cached_tile_state_over_history() -> None:
+    base_time = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    capture_time = base_time + timedelta(minutes=5)
+
+    config = _make_config()
+    fetcher = DummyFetcher()
+
+    payload_a = b"A"
+    payload_b = b"B"
+    fetcher.payloads = {(0, 0): payload_a, (0, 1): payload_b}
+
+    cached_tiles: Dict[Coordinate, ManifestTile] = {
+        (0, 0): ManifestTile(
+            coordinate=(0, 0),
+            object_key="tiles/test/aa.png",
+            checksum=sha256(payload_a).hexdigest(),
+            size=len(payload_a),
+        ),
+        (0, 1): ManifestTile(
+            coordinate=(0, 1),
+            object_key="tiles/test/bb.png",
+            checksum=sha256(payload_b).hexdigest(),
+            size=len(payload_b),
+        ),
+    }
+
+    class CacheStorage(StorageBackend):
+        def __init__(self) -> None:
+            self.load_manifest_calls = 0
+            self.last_cache_tiles: Optional[Dict[Coordinate, ManifestTile]] = None
+            self.last_cache_expected: Optional[Set[Coordinate]] = None
+            self.last_cache_time: Optional[datetime] = None
+
+        def get_latest_manifest(self, slug: str) -> ManifestPointer:
+            return ManifestPointer(object_key="manifests/test/prev.json", capture_time=base_time)
+
+        def load_manifest(self, pointer: ManifestPointer) -> DeltaManifest:
+            self.load_manifest_calls += 1
+            raise AssertionError("Manifest history should not be consulted when cache is populated")
+
+        def store_tile(
+            self,
+            slug: str,
+            capture_time: datetime,
+            coord: Coordinate,
+            payload: bytes,
+            checksum: str,
+        ) -> StoredTile:
+            raise AssertionError("Tile uploads should be skipped when prior state is cached")
+
+        def write_manifest(self, manifest: DeltaManifest) -> ManifestPointer:
+            return ManifestPointer(object_key="manifests/test/current.json", capture_time=manifest.capture_time)
+
+        def update_latest_manifest(self, slug: str, pointer: ManifestPointer) -> None:
+            return None
+
+        def load_tile_cache(self, slug: str) -> Dict[Coordinate, ManifestTile]:
+            return cached_tiles
+
+        def write_tile_cache(
+            self,
+            *,
+            slug: str,
+            capture_time: datetime,
+            tiles: Dict[Coordinate, ManifestTile],
+            expected_coordinates: Set[Coordinate],
+        ) -> None:
+            self.last_cache_tiles = dict(tiles)
+            self.last_cache_expected = set(expected_coordinates)
+            self.last_cache_time = capture_time
+
+    storage = CacheStorage()
+    outcome = run_capture(
+        slug=config.slug,
+        config=config,
+        storage=storage,
+        fetcher=fetcher,
+        capture_time=capture_time,
+    )
+
+    assert storage.load_manifest_calls == 0
+    assert not outcome.changed_tiles
+    assert {(tile.coordinate) for tile in outcome.deduplicated_tiles} == {(0, 0), (0, 1)}
+
+    assert storage.last_cache_tiles == cached_tiles
+    assert storage.last_cache_expected == set(config.coordinates.iter_tiles())
+    assert storage.last_cache_time == capture_time
