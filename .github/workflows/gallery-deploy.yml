@@ -32,11 +32,7 @@ jobs:
       - name: Build gallery site
         # Adjust --slug or add a matrix if you publish multiple regions.
         run: |
-          wplace-gallery build \\
-            --slug nemo \\
-            --config config.json \\
-            --asset-base-url "${{ secrets.GALLERY_ASSET_BASE_URL }}" \\
-            --output dist/index.html
+          wplace-gallery build --slug nemo --config config.json --asset-base-url "${{ secrets.GALLERY_ASSET_BASE_URL }}" --output dist/index.html
 
       - name: Publish to gallery-site branch
         uses: peaceiris/actions-gh-pages@v4
