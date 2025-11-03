@@ -2,7 +2,7 @@ name: WPlace Capture
 
 on:
   schedule:
-    - cron: "*/6 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -14,7 +14,6 @@ concurrency:
 
 jobs:
   capture:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-slim
     timeout-minutes: 15
     environment: prod
