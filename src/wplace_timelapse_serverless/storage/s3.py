@@ -146,7 +146,11 @@ class S3StorageBackend(AbstractStorageBackend):
             self.client.head_object(Bucket=self.paths.bucket, Key=key)
             return True
         except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}:
+            code = exc.response.get("Error", {}).get("Code")
+            if code in {"404", "NoSuchKey", "NotFound"}:
+                return False
+            # Some providers do not allow HEAD when GetObject is permitted; treat as missing.
+            if code in {"403", "AccessDenied"}:
                 return False
             raise
 
