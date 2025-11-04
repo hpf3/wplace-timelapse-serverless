@@ -18,10 +18,6 @@ FORWARDED_HEADERS = (
     "range",
     "if-none-match",
     "if-modified-since",
-    "accept",
-    "accept-encoding",
-    "cache-control",
-    "content-type",
     "if-match",
 )
 DEFAULT_ALLOWED_METHODS = "GET,HEAD,OPTIONS"
@@ -164,7 +160,10 @@ def _resolve_object_key(pathname: str, strip_prefix: str) -> str:
 
 def _build_target_url(config: WorkerConfig, object_key: str, query: str) -> tuple[str, str]:
     parsed_endpoint = urlparse(config.endpoint)
-    host = parsed_endpoint.netloc
+    host_only = parsed_endpoint.hostname or ""
+    port = parsed_endpoint.port
+    default = (parsed_endpoint.scheme == "https" and 443) or (parsed_endpoint.scheme == "http" and 80)
+    host = host_only if (port is None or default) else f"{host_only}:{port}"
 
     if config.virtual_hosted:
         host = f"{config.bucket}.{host}"
@@ -215,7 +214,7 @@ def _sign_request(
     date_stamp = now.strftime("%Y%m%d")
 
     parsed = urlparse(url)
-    canonical_uri = quote(parsed.path or "/", safe="/-_.~")
+    canonical_uri = parsed.path or "/"
     canonical_querystring = _canonical_querystring(parsed.query)
 
     canonical_headers = {
