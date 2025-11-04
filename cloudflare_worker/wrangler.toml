@@ -12,3 +12,10 @@ CACHE_TTL = "300"
 STRIP_PREFIX = ""
 VIRTUAL_HOSTED_STYLE = "0"
 UPSTREAM_USER_AGENT = "wplace-worker/1.0"
+
+[observability]
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
