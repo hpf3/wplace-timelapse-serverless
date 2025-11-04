@@ -26,8 +26,12 @@ def main() -> int:
     env["VIRTUAL_ENV"] = str(VENV_DIR)
     env["PATH"] = f"{BIN_DIR}{os.pathsep}{env.get('PATH', '')}"
 
+    config_path = ROOT / "wrangler.toml"
+    args = [str(PYWRANGLER), "deploy"]
+    if config_path.exists():
+        args.extend(["--config", str(config_path)])
     try:
-        subprocess.check_call([str(PYWRANGLER), "deploy"], cwd=WORKER_DIR, env=env)
+        subprocess.check_call(args, cwd=WORKER_DIR, env=env)
     except subprocess.CalledProcessError as exc:
         return exc.returncode
     return 0
@@ -35,4 +39,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
