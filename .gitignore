@@ -23,3 +23,6 @@ python_modules/
 
 # Test secrets
 tests/.env.secrets
+
+# logs
+logs/

@@ -69,6 +69,10 @@ STRIP_PREFIX = "static" # optional
 VIRTUAL_HOSTED_STYLE = "1" # optional; set for AWS-hosted buckets
 ```
 
+When deploying via Cloudflare Pages, run `python3 cloudflare_worker/build_worker.py` as the build
+command and `python3 cloudflare_worker/deploy_worker.py` as the deploy command so only the lightweight
+worker package (and `workers-py`) are bundled.
+
 Expose the worker at a public hostname (e.g. `https://worker.example.com`) and use that URL as the `--asset-base-url` when building the gallery. The HTML shell then calls the worker for `manifests/<slug>/latest.json` and tile PNGs on demand. The route `/static/...` would be rewritten to the bucket object key after removing the prefix. Responses automatically add permissive CORS headers when `ALLOWED_ORIGINS` matches the request origin.
 
 If you reuse the provided `gallery-deploy` workflow, store this worker URL in the `GALLERY_ASSET_BASE_URL` repository secret so the build step can inject it during publishing.
