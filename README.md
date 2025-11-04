@@ -3,7 +3,7 @@
 This repository provides the Python runtime, capture worker, and storage abstractions for running the WPlace timelapse collectors on serverless infrastructure. The goal is to reuse the domain logic from the legacy project while making it trivial to deploy scheduled workers that push captures directly to S3-compatible storage (AWS S3, Cloudflare R2, etc.).
 
 ## Project layout
-
+ 
 - `src/wplace_timelapse_serverless/` – core package containing configuration models, manifest types, storage adapters, and the capture runner.
 - `src/wplace_timelapse_serverless/web_gallery/` – static gallery generator for browsing stored tiles.
 - `src/wplace_timelapse_serverless/video/` – timelapse video renderer that converts manifest history into frames and mp4 output.
