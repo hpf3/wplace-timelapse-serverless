@@ -127,13 +127,10 @@ async def main(request, env, ctx=None):  # type: ignore[invalid-annotation]
     for key, value in signed_headers.items():
         js_headers.append(key, value)
 
-    init: Dict[str, object] = {"method": method, "headers": js_headers}
-
-    if config.cache_ttl and method == "GET":
-        init["cf"] = {"cacheTtl": int(config.cache_ttl)}
+    request_init = _build_request_init(method=method, headers=js_headers, cache_ttl=config.cache_ttl if method == "GET" else None)
 
     try:
-        response = await js.fetch(target_url, to_js(init))
+        response = await js.fetch(target_url, request_init)
     except Exception as exc:  # pragma: no cover - dependent on Cloudflare runtime
         return _text_response(f"Upstream fetch failed: {exc}", status=502)
 
@@ -356,7 +353,7 @@ async def _normalize_rejection_response(response, method: str):
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store",
     }
-    return js.Response.new(payload, to_js({"status": 502, "headers": headers}))
+    return js.Response.new(payload, _to_js_object({"status": 502, "headers": headers}))
 
 
 def _clone_response(response):
@@ -377,12 +374,12 @@ def _clone_response(response):
         init["statusText"] = str(status_text)
     init["headers"] = headers_copy
 
-    return js.Response.new(response.body, to_js(init))
+    return js.Response.new(response.body, _to_js_object(init))
 
 
 def _text_response(body: str, *, status: int, headers: Optional[Dict[str, str]] = None):
     init = {"status": status, "headers": headers or {"Content-Type": "text/plain"}}
-    return js.Response.new(body, to_js(init))
+    return js.Response.new(body, _to_js_object(init))
 
 
 def _env_get(env: object, key: str, default: Optional[str] = None) -> Optional[str]:
@@ -391,6 +388,17 @@ def _env_get(env: object, key: str, default: Optional[str] = None) -> Optional[s
         return None if v is None else str(v)
     except Exception:
         return default
+
+
+def _build_request_init(*, method: str, headers, cache_ttl: Optional[int]):
+    payload: Dict[str, object] = {"method": method, "headers": headers}
+    if cache_ttl:
+        payload["cf"] = {"cacheTtl": int(cache_ttl)}
+    return _to_js_object(payload)
+
+
+def _to_js_object(data: Dict[str, object]):
+    return to_js(data, dict_converter=js.Object.fromEntries)
 
 
 
