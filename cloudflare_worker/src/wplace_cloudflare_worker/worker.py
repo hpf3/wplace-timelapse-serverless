@@ -328,25 +328,26 @@ def _text_response(body: str, *, status: int, headers: Optional[Dict[str, str]] 
 
 
 def _env_get(env: object, key: str, default: Optional[str] = None) -> Optional[str]:
-    """Return an environment binding from either .get or attribute access."""
-    if hasattr(env, "get"):
-        value = env.get(key)  # type: ignore[attr-defined]
-        if value is not None:
-            return str(value)
-    if hasattr(env, key):
-        return str(getattr(env, key))
-    return default
+    try:
+        v = getattr(env, key)
+        return None if v is None else str(v)
+    except Exception:
+        return default
 
 
-# class Default(WorkerEntrypoint):
-#     async def fetch(self, request):
-#         # Pass the bound env through to your existing main()
-#         return await main(request, self.env)
+
+from workers import WorkerEntrypoint
+
 class Default(WorkerEntrypoint):
+    # Newer shape (docs as of Oct 2025)
     async def fetch(self, request):
-        try:
-            return Response(f"S3_ENDPOINT={self.env.S3_ENDPOINT}")
-        except Exception as e:
-            return Response(repr(e), status=500)
+        return await main(request, getattr(self, "env", None))
+
+    # Back-compat for runtimes/SDKs that require on_fetch
+    async def on_fetch(self, request, env=None, ctx=None):
+        if env is None:
+            env = getattr(self, "env", None)
+        return await main(request, env, ctx)
+
 
 __all__ = ["Default", "main"]
