@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "src/wplace_timelapse_serverless/web_gallery/**"
   workflow_dispatch: {}
 
 permissions:

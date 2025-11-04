@@ -127,6 +127,9 @@ async def main(request, env, ctx=None):  # type: ignore[invalid-annotation]
     for key, value in signed_headers.items():
         js_headers.append(key, value)
 
+    if config.user_agent:
+        js_headers.set("User-Agent", config.user_agent)
+
     request_init = _build_request_init(method=method, headers=js_headers, cache_ttl=config.cache_ttl if method == "GET" else None)
 
     try:
@@ -195,7 +198,6 @@ def _gather_forward_headers(headers, config: WorkerConfig) -> Dict[str, str]:
         value = headers.get(name)
         if value:
             result[name.lower()] = str(value)
-    result["user-agent"] = config.user_agent
     return result
 
 
