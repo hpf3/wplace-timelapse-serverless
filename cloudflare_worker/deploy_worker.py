@@ -26,7 +26,7 @@ def main() -> int:
     env["VIRTUAL_ENV"] = str(VENV_DIR)
     env["PATH"] = f"{BIN_DIR}{os.pathsep}{env.get('PATH', '')}"
 
-    config_path = ROOT / "wrangler.toml"
+    config_path = WORKER_DIR / "wrangler.toml"
     args = [str(PYWRANGLER), "deploy"]
     if config_path.exists():
         args.extend(["--config", str(config_path)])

@@ -8,6 +8,7 @@ This repository provides the Python runtime, capture worker, and storage abstrac
 - `src/wplace_timelapse_serverless/web_gallery/` – static gallery generator for browsing stored tiles.
 - `src/wplace_timelapse_serverless/video/` – timelapse video renderer that converts manifest history into frames and mp4 output.
 - `cloudflare_worker/src/wplace_cloudflare_worker/` – Cloudflare Worker entrypoint that signs and proxies S3/R2 requests.
+- `cloudflare_worker/wrangler.toml` – Wrangler configuration scoped to the worker package.
 - `tests/` – unit and smoke tests (placeholders today).
 - `pyproject.toml` – project metadata and dependency list.
 
@@ -56,7 +57,7 @@ Frames and a `frames.json` manifest are written to `./renders/frames/` before en
 The worker signs requests with AWS SigV4 so browsers (and the gallery) can fetch manifests/tiles without exposing credentials:
 
 ```bash
-# wrangler.toml snippet
+# cloudflare_worker/wrangler.toml snippet
 [vars]
 S3_ENDPOINT = "https://s3.amazonaws.com"
 S3_BUCKET = "your-bucket"
@@ -69,9 +70,10 @@ STRIP_PREFIX = "static" # optional
 VIRTUAL_HOSTED_STYLE = "1" # optional; set for AWS-hosted buckets
 ```
 
-When deploying via Cloudflare Pages, run `python3 cloudflare_worker/build_worker.py` as the build
-command and `python3 cloudflare_worker/deploy_worker.py` as the deploy command so only the lightweight
-worker package (and `workers-py`) are bundled.
+When deploying via Cloudflare Pages from the repository root, run `python3 cloudflare_worker/build_worker.py`
+as the build command and `python3 cloudflare_worker/deploy_worker.py` as the deploy command so only the
+lightweight worker package (and `workers-py`) are bundled. If the Pages “Root directory” is set to
+`/cloudflare_worker`, drop the `cloudflare_worker/` prefix in each command.
 
 Expose the worker at a public hostname (e.g. `https://worker.example.com`) and use that URL as the `--asset-base-url` when building the gallery. The HTML shell then calls the worker for `manifests/<slug>/latest.json` and tile PNGs on demand. The route `/static/...` would be rewritten to the bucket object key after removing the prefix. Responses automatically add permissive CORS headers when `ALLOWED_ORIGINS` matches the request origin.
 
