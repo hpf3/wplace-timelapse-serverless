@@ -139,10 +139,7 @@ async def main(request, env, ctx=None):  # type: ignore[invalid-annotation]
 
     cors_origin = _resolve_cors_origin(request_headers.get("Origin"), config.allowed_origins)
     if cors_origin:
-        response.headers.set("Access-Control-Allow-Origin", cors_origin)
-        if cors_origin != "*":
-            response.headers.set("Vary", "Origin")
-            response.headers.set("Access-Control-Allow-Credentials", "true")
+        response = _with_cors_headers(response, cors_origin)
     return response
 
 
@@ -320,6 +317,37 @@ def _handle_options(request, config: WorkerConfig):
         headers["Access-Control-Allow-Origin"] = "*"
 
     return _text_response("", status=204, headers=headers)
+
+
+def _with_cors_headers(response, cors_origin: str):
+    mutable = _clone_response(response)
+    headers = mutable.headers
+    headers.set("Access-Control-Allow-Origin", cors_origin)
+    if cors_origin != "*":
+        headers.set("Vary", "Origin")
+        headers.set("Access-Control-Allow-Credentials", "true")
+    return mutable
+
+
+def _clone_response(response):
+    headers_copy = js.Headers.new()
+    iterator = response.headers.entries()
+    while True:
+        entry = iterator.next()
+        if bool(entry.done):
+            break
+        key, value = entry.value
+        headers_copy.append(key, value)
+
+    init = {
+        "status": int(response.status),
+    }
+    status_text = getattr(response, "statusText", "")
+    if status_text:
+        init["statusText"] = str(status_text)
+    init["headers"] = headers_copy
+
+    return js.Response.new(response.body, to_js(init))
 
 
 def _text_response(body: str, *, status: int, headers: Optional[Dict[str, str]] = None):
