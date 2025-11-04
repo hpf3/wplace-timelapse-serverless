@@ -342,6 +342,8 @@ class Default(WorkerEntrypoint):
     async def fetch(self, request):
         return await main(request, self.env)
 
+    async def on_fetch(self, request, env, ctx):
+        return await main(request, env, ctx)
+
 
 __all__ = ["Default", "main"]
-
