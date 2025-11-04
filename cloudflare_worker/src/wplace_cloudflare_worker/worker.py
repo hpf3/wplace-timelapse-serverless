@@ -137,6 +137,8 @@ async def main(request, env, ctx=None):  # type: ignore[invalid-annotation]
     except Exception as exc:  # pragma: no cover - dependent on Cloudflare runtime
         return _text_response(f"Upstream fetch failed: {exc}", status=502)
 
+    response = await _normalize_rejection_response(response, method)
+
     cors_origin = _resolve_cors_origin(request_headers.get("Origin"), config.allowed_origins)
     if cors_origin:
         response = _with_cors_headers(response, cors_origin)
@@ -327,6 +329,34 @@ def _with_cors_headers(response, cors_origin: str):
         headers.set("Vary", "Origin")
         headers.set("Access-Control-Allow-Credentials", "true")
     return mutable
+
+
+async def _normalize_rejection_response(response, method: str):
+    status = int(getattr(response, "status", 0))
+    if status not in {401, 403}:
+        return response
+
+    body_text = ""
+    if method != "HEAD":
+        try:
+            body_text = await response.text()
+        except Exception:  # pragma: no cover - defensive
+            body_text = ""
+
+    message_lines = [
+        f"Upstream request rejected with status {status}. Check worker credentials or bucket policy.",
+    ]
+    if body_text:
+        stripped = body_text.strip()
+        if stripped:
+            message_lines.append(stripped)
+
+    payload = "" if method == "HEAD" else "\n\n".join(message_lines)
+    headers = {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+    }
+    return js.Response.new(payload, to_js({"status": 502, "headers": headers}))
 
 
 def _clone_response(response):
