@@ -11,7 +11,7 @@ from urllib.parse import parse_qsl, quote, urlparse
 
 import js
 from pyodide.ffi import to_js
-from workers import WorkerEntrypoint
+from workers import WorkerEntrypoint, Response
 
 SERVICE_NAME = "s3"
 FORWARDED_HEADERS = (
@@ -338,11 +338,15 @@ def _env_get(env: object, key: str, default: Optional[str] = None) -> Optional[s
     return default
 
 
+# class Default(WorkerEntrypoint):
+#     async def fetch(self, request):
+#         # Pass the bound env through to your existing main()
+#         return await main(request, self.env)
 class Default(WorkerEntrypoint):
-    async def fetch(self, request, env, ctx):
-        return await main(request, env, ctx)
-    async def on_fetch(self, request, env, ctx):
-        return await main(request, env, ctx)
-
+    async def fetch(self, request):
+        try:
+            return Response(f"S3_ENDPOINT={self.env.S3_ENDPOINT}")
+        except Exception as e:
+            return Response(repr(e), status=500)
 
 __all__ = ["Default", "main"]
