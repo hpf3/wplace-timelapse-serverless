@@ -26,3 +26,6 @@ tests/.env.secrets
 
 # logs
 logs/
+
+# direnv
+.envrc
