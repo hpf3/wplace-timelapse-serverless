@@ -10,13 +10,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, cast
 
 from PIL import Image
 
 from wplace_timelapse_serverless.config import GlobalSettings, TimelapseConfig
 from wplace_timelapse_serverless.manifest import ManifestTile
 from wplace_timelapse_serverless.manifest_utils import ManifestWithPointer, collect_manifest_chain
+from wplace_timelapse_serverless.storage.base import StorageBackend
 from wplace_timelapse_serverless.storage.s3 import S3StorageBackend
 
 LOGGER = logging.getLogger("wplace.video")
@@ -65,7 +66,7 @@ class TimelapseVideoGenerator:
         self,
         *,
         timelapse: TimelapseConfig,
-        storage: S3StorageBackend,
+        storage: StorageBackend,
         global_settings: Optional[GlobalSettings] = None,
     ) -> None:
         self.timelapse = timelapse
@@ -88,6 +89,17 @@ class TimelapseVideoGenerator:
         )
         if not manifests:
             raise RuntimeError(f"No manifests found for slug {self.timelapse.slug}")
+        return self.generate_from_manifests(manifests=manifests, options=options)
+
+    def generate_from_manifests(
+        self,
+        *,
+        manifests: Sequence[ManifestWithPointer],
+        options: VideoGenerationOptions,
+    ) -> VideoGenerationResult:
+        """Render frames and optionally encode a video from preloaded manifests."""
+        if not manifests:
+            raise RuntimeError("No manifests provided for rendering.")
 
         options.output_dir.mkdir(parents=True, exist_ok=True)
         frame_dir = options.output_dir / "frames"
@@ -181,7 +193,8 @@ class TimelapseVideoGenerator:
         if cached is not None:
             return cached
 
-        response = self.storage.client.get_object(Bucket=self.storage.paths.bucket, Key=tile.object_key)
+        storage = cast(S3StorageBackend, self.storage)
+        response = storage.client.get_object(Bucket=storage.paths.bucket, Key=tile.object_key)
         payload = response["Body"].read()
 
         image = Image.open(BytesIO(payload)).convert("RGBA")

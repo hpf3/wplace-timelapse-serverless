@@ -6,9 +6,11 @@ from .generator import (
     VideoGenerationOptions,
     VideoGenerationResult,
 )
+from .http_generator import HttpTimelapseVideoGenerator
 
 __all__ = [
     "FrameArtifact",
+    "HttpTimelapseVideoGenerator",
     "TimelapseVideoGenerator",
     "VideoGenerationOptions",
     "VideoGenerationResult",
